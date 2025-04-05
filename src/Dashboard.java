@@ -40,10 +40,10 @@ public class Dashboard {
             frame.setSize(1200, 800);
             frame.setLocationRelativeTo(null);
             frame.setUndecorated(true);
-            
+
             // Make the frame resizable even though it's undecorated
             frame.setMinimumSize(new Dimension(1000, 700));
-            
+
             // Create the resizable border
             JPanel resizablePanel = new JPanel(new BorderLayout());
             resizablePanel.setBorder(BorderFactory.createLineBorder(Color.GRAY, 2));
@@ -83,10 +83,10 @@ public class Dashboard {
             DragListener dragListener = new DragListener();
             titleBar.addMouseListener(dragListener);
             titleBar.addMouseMotionListener(dragListener);
-            
+
             // Add the main panel to the resizable panel
             resizablePanel.add(mainPanel, BorderLayout.CENTER);
-            
+
             // Add the resizable border and functionality
             ResizeListener resizeListener = new ResizeListener(frame);
             resizablePanel.addMouseListener(resizeListener);
@@ -108,11 +108,11 @@ public class Dashboard {
         titleLabel.setFont(new Font("Arial", Font.BOLD, 15));
         titleLabel.setBorder(BorderFactory.createEmptyBorder(0, 15, 0, 0));
         titleBar.add(titleLabel, BorderLayout.WEST);
-        
+
         // Add window control buttons
         JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
         controlPanel.setOpaque(false);
-        
+
         // Minimize button
         JButton minimizeButton = new JButton("−");
         minimizeButton.setFont(new Font("Arial", Font.BOLD, 14));
@@ -121,7 +121,7 @@ public class Dashboard {
         minimizeButton.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
         minimizeButton.setFocusPainted(false);
         minimizeButton.addActionListener(e -> frame.setState(JFrame.ICONIFIED));
-        
+
         // Maximize/restore button
         JButton maximizeButton = new JButton("□");
         maximizeButton.setFont(new Font("Arial", Font.BOLD, 14));
@@ -147,11 +147,11 @@ public class Dashboard {
         closeButton.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
         closeButton.setFocusPainted(false);
         closeButton.addActionListener(e -> System.exit(0));
-        
+
         controlPanel.add(minimizeButton);
         controlPanel.add(maximizeButton);
         controlPanel.add(closeButton);
-        
+
         titleBar.add(controlPanel, BorderLayout.EAST);
 
         return titleBar;
@@ -380,7 +380,7 @@ public class Dashboard {
             }
         }
     }
-    
+
     // Class to handle window resizing
     private static class ResizeListener extends MouseAdapter {
         private static final int RESIZE_BORDER = 5;
@@ -388,24 +388,24 @@ public class Dashboard {
         private int cursor;
         private Rectangle startBounds;
         private Point startPoint;
-        
+
         public ResizeListener(JFrame frame) {
             this.frame = frame;
         }
-        
+
         @Override
         public void mousePressed(MouseEvent e) {
             startPoint = e.getPoint();
             startBounds = frame.getBounds();
         }
-        
+
         @Override
         public void mouseMoved(MouseEvent e) {
             int x = e.getX();
             int y = e.getY();
             int width = frame.getWidth();
             int height = frame.getHeight();
-            
+
             // Determine cursor based on position
             if (y >= height - RESIZE_BORDER) {
                 if (x >= width - RESIZE_BORDER) {
@@ -430,24 +430,24 @@ public class Dashboard {
             } else {
                 cursor = Cursor.DEFAULT_CURSOR;
             }
-            
+
             frame.setCursor(Cursor.getPredefinedCursor(cursor));
         }
-        
+
         @Override
         public void mouseDragged(MouseEvent e) {
             if (cursor == Cursor.DEFAULT_CURSOR || frame.getExtendedState() == JFrame.MAXIMIZED_BOTH) {
                 return;
             }
-            
+
             int dx = e.getX() - startPoint.x;
             int dy = e.getY() - startPoint.y;
-            
+
             int x = startBounds.x;
             int y = startBounds.y;
             int width = startBounds.width;
             int height = startBounds.height;
-            
+
             // Resize based on cursor position
             switch (cursor) {
                 case Cursor.NW_RESIZE_CURSOR:
@@ -485,7 +485,7 @@ public class Dashboard {
                     width -= dx;
                     break;
             }
-            
+
             // Enforce minimum size
             Dimension minSize = frame.getMinimumSize();
             if (width < minSize.width) {
@@ -500,7 +500,7 @@ public class Dashboard {
                 }
                 height = minSize.height;
             }
-            
+
             // Set the new bounds
             frame.setBounds(x, y, width, height);
             frame.revalidate();
