@@ -39,12 +39,19 @@ public class Dashboard {
             frame.setSize(1200, 800);
             frame.setLocationRelativeTo(null);
             frame.setUndecorated(true);
+            
+            // Make the frame resizable even though it's undecorated
+            frame.setMinimumSize(new Dimension(1000, 700));
+            
+            // Create the resizable border
+            JPanel resizablePanel = new JPanel(new BorderLayout());
+            resizablePanel.setBorder(BorderFactory.createLineBorder(Color.GRAY, 2));
 
             // Create and add components
             JPanel mainPanel = new JPanel(new BorderLayout(0, 0));
 
             // Title bar
-            TitleBar titleBar = createCustomTitleBar();
+            TitleBar titleBar = createCustomTitleBar(frame);
             mainPanel.add(titleBar, BorderLayout.NORTH);
 
             // Main content area with sidebar and dashboard
@@ -75,13 +82,21 @@ public class Dashboard {
             DragListener dragListener = new DragListener();
             titleBar.addMouseListener(dragListener);
             titleBar.addMouseMotionListener(dragListener);
+            
+            // Add the main panel to the resizable panel
+            resizablePanel.add(mainPanel, BorderLayout.CENTER);
+            
+            // Add the resizable border and functionality
+            ResizeListener resizeListener = new ResizeListener(frame);
+            resizablePanel.addMouseListener(resizeListener);
+            resizablePanel.addMouseMotionListener(resizeListener);
 
-            frame.add(mainPanel);
+            frame.add(resizablePanel);
             frame.setVisible(true);
         });
     }
 
-    private static TitleBar createCustomTitleBar() {
+    private static TitleBar createCustomTitleBar(JFrame frame) {
         TitleBar titleBar = new TitleBar();
         titleBar.setBackground(PRIMARY_COLOR);
         titleBar.setPreferredSize(new Dimension(0, 40));
@@ -92,16 +107,51 @@ public class Dashboard {
         titleLabel.setFont(new Font("Arial", Font.BOLD, 15));
         titleLabel.setBorder(BorderFactory.createEmptyBorder(0, 15, 0, 0));
         titleBar.add(titleLabel, BorderLayout.WEST);
+        
+        // Add window control buttons
+        JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
+        controlPanel.setOpaque(false);
+        
+        // Minimize button
+        JButton minimizeButton = new JButton("−");
+        minimizeButton.setFont(new Font("Arial", Font.BOLD, 14));
+        minimizeButton.setForeground(Color.WHITE);
+        minimizeButton.setBackground(PRIMARY_COLOR);
+        minimizeButton.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
+        minimizeButton.setFocusPainted(false);
+        minimizeButton.addActionListener(e -> frame.setState(JFrame.ICONIFIED));
+        
+        // Maximize/restore button
+        JButton maximizeButton = new JButton("□");
+        maximizeButton.setFont(new Font("Arial", Font.BOLD, 14));
+        maximizeButton.setForeground(Color.WHITE);
+        maximizeButton.setBackground(PRIMARY_COLOR);
+        maximizeButton.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
+        maximizeButton.setFocusPainted(false);
+        maximizeButton.addActionListener(e -> {
+            if (frame.getExtendedState() == JFrame.MAXIMIZED_BOTH) {
+                frame.setExtendedState(JFrame.NORMAL);
+                maximizeButton.setText("□");
+            } else {
+                frame.setExtendedState(JFrame.MAXIMIZED_BOTH);
+                maximizeButton.setText("❐");
+            }
+        });
 
-        // Add close button
+        // Close button
         JButton closeButton = new JButton("X");
         closeButton.setFont(new Font("Arial", Font.BOLD, 14));
         closeButton.setForeground(Color.WHITE);
         closeButton.setBackground(PRIMARY_COLOR);
-        closeButton.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 15));
+        closeButton.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
         closeButton.setFocusPainted(false);
         closeButton.addActionListener(e -> System.exit(0));
-        titleBar.add(closeButton, BorderLayout.EAST);
+        
+        controlPanel.add(minimizeButton);
+        controlPanel.add(maximizeButton);
+        controlPanel.add(closeButton);
+        
+        titleBar.add(controlPanel, BorderLayout.EAST);
 
         return titleBar;
     }
@@ -338,12 +388,138 @@ public class Dashboard {
             Point currentPoint = e.getLocationOnScreen();
             JFrame frame = (JFrame) SwingUtilities.getWindowAncestor((Component) e.getSource());
 
-            if (frame != null) {
+            if (frame != null && frame.getExtendedState() != JFrame.MAXIMIZED_BOTH) {
                 frame.setLocation(
                         currentPoint.x - startPoint.x,
                         currentPoint.y - startPoint.y
                 );
             }
+        }
+    }
+    
+    // Class to handle window resizing
+    private static class ResizeListener extends MouseAdapter {
+        private static final int RESIZE_BORDER = 5;
+        private JFrame frame;
+        private int cursor;
+        private Rectangle startBounds;
+        private Point startPoint;
+        
+        public ResizeListener(JFrame frame) {
+            this.frame = frame;
+        }
+        
+        @Override
+        public void mousePressed(MouseEvent e) {
+            startPoint = e.getPoint();
+            startBounds = frame.getBounds();
+        }
+        
+        @Override
+        public void mouseMoved(MouseEvent e) {
+            int x = e.getX();
+            int y = e.getY();
+            int width = frame.getWidth();
+            int height = frame.getHeight();
+            
+            // Determine cursor based on position
+            if (y >= height - RESIZE_BORDER) {
+                if (x >= width - RESIZE_BORDER) {
+                    cursor = Cursor.SE_RESIZE_CURSOR;
+                } else if (x <= RESIZE_BORDER) {
+                    cursor = Cursor.SW_RESIZE_CURSOR;
+                } else {
+                    cursor = Cursor.S_RESIZE_CURSOR;
+                }
+            } else if (y <= RESIZE_BORDER) {
+                if (x >= width - RESIZE_BORDER) {
+                    cursor = Cursor.NE_RESIZE_CURSOR;
+                } else if (x <= RESIZE_BORDER) {
+                    cursor = Cursor.NW_RESIZE_CURSOR;
+                } else {
+                    cursor = Cursor.N_RESIZE_CURSOR;
+                }
+            } else if (x >= width - RESIZE_BORDER) {
+                cursor = Cursor.E_RESIZE_CURSOR;
+            } else if (x <= RESIZE_BORDER) {
+                cursor = Cursor.W_RESIZE_CURSOR;
+            } else {
+                cursor = Cursor.DEFAULT_CURSOR;
+            }
+            
+            frame.setCursor(Cursor.getPredefinedCursor(cursor));
+        }
+        
+        @Override
+        public void mouseDragged(MouseEvent e) {
+            if (cursor == Cursor.DEFAULT_CURSOR || frame.getExtendedState() == JFrame.MAXIMIZED_BOTH) {
+                return;
+            }
+            
+            int dx = e.getX() - startPoint.x;
+            int dy = e.getY() - startPoint.y;
+            
+            int x = startBounds.x;
+            int y = startBounds.y;
+            int width = startBounds.width;
+            int height = startBounds.height;
+            
+            // Resize based on cursor position
+            switch (cursor) {
+                case Cursor.NW_RESIZE_CURSOR:
+                    x += dx;
+                    y += dy;
+                    width -= dx;
+                    height -= dy;
+                    break;
+                case Cursor.N_RESIZE_CURSOR:
+                    y += dy;
+                    height -= dy;
+                    break;
+                case Cursor.NE_RESIZE_CURSOR:
+                    y += dy;
+                    width += dx;
+                    height -= dy;
+                    break;
+                case Cursor.E_RESIZE_CURSOR:
+                    width += dx;
+                    break;
+                case Cursor.SE_RESIZE_CURSOR:
+                    width += dx;
+                    height += dy;
+                    break;
+                case Cursor.S_RESIZE_CURSOR:
+                    height += dy;
+                    break;
+                case Cursor.SW_RESIZE_CURSOR:
+                    x += dx;
+                    width -= dx;
+                    height += dy;
+                    break;
+                case Cursor.W_RESIZE_CURSOR:
+                    x += dx;
+                    width -= dx;
+                    break;
+            }
+            
+            // Enforce minimum size
+            Dimension minSize = frame.getMinimumSize();
+            if (width < minSize.width) {
+                if (x != startBounds.x) {
+                    x = startBounds.x + startBounds.width - minSize.width;
+                }
+                width = minSize.width;
+            }
+            if (height < minSize.height) {
+                if (y != startBounds.y) {
+                    y = startBounds.y + startBounds.height - minSize.height;
+                }
+                height = minSize.height;
+            }
+            
+            // Set the new bounds
+            frame.setBounds(x, y, width, height);
+            frame.revalidate();
         }
     }
 
