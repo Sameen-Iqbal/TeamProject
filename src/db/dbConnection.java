@@ -69,6 +69,70 @@ public class dbConnection {
         }
     }
 
+    // Get all bookings for refund UI
+    public static ResultSet getAllBookings() {
+        String query = "SELECT b.Booking_ID, b.Patron_ID, b.TotalCost, b.Booking_Date, " +
+                "b.IsCancelled, p.IsRefunded " +
+                "FROM Booking b " +
+                "LEFT JOIN Payment p ON b.Booking_ID = p.Booking_ID";
+
+        try {
+            Connection connection = getConnection();
+            PreparedStatement statement = connection.prepareStatement(query);
+            return statement.executeQuery();
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+
+    // Mark a booking as refunded (IsCancelled = 1)
+    public static boolean markBookingAsRefunded(int bookingId) {
+        String query = "UPDATE Booking SET IsCancelled = 1 WHERE Booking_ID = ?";
+
+        try (Connection con = getConnection();
+             PreparedStatement stmt = con.prepareStatement(query)) {
+
+            stmt.setInt(1, bookingId);
+            return stmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    // Mark a payment as refunded (IsRefunded = 1)
+    public static boolean markPaymentAsRefunded(int bookingId) {
+        String query = "UPDATE Payment SET IsRefunded = 1 WHERE Booking_ID = ?";
+
+        try (Connection con = getConnection();
+             PreparedStatement stmt = con.prepareStatement(query)) {
+
+            stmt.setInt(1, bookingId);
+            return stmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    // Mark related tickets as unsold (IsSold = 0)
+    public static boolean markTicketsAsUnsold(int bookingId) {
+        String query = "UPDATE Ticket SET IsSold = 0 WHERE Booking_ID = ?";
+
+        try (Connection con = getConnection();
+             PreparedStatement stmt = con.prepareStatement(query)) {
+
+            stmt.setInt(1, bookingId);
+            return stmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+
     /**
      * Provides sample ticket sales data for demonstration when real data is not available
      * @return Map with show names as keys and ticket counts as values
