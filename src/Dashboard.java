@@ -2,6 +2,7 @@ import UI.PatronPage;
 import UI.ReportsPage;
 import UI.SeatingPage;
 import UI.TicketsPage;
+import UI.RefundsPage;
 import java.sql.SQLException;
 
 import db.dbConnection;
@@ -345,33 +346,16 @@ public class Dashboard {
 
 
     private static JPanel createRefundsPage() {
-        JPanel refundsPanel = new JPanel(new BorderLayout());
-        refundsPanel.setBackground(BACKGROUND_COLOR);
-        
-        JPanel headerPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        headerPanel.setBackground(CARD_COLOR);
-        headerPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        
-        JLabel titleLabel = new JLabel("Process Refunds");
-        titleLabel.setFont(new Font("Arial", Font.BOLD, 20));
-        titleLabel.setForeground(TEXT_COLOR);
-        headerPanel.add(titleLabel);
-        
-        refundsPanel.add(headerPanel, BorderLayout.NORTH);
-        
-        JPanel contentPanel = new JPanel(new BorderLayout());
-        contentPanel.setBackground(CARD_COLOR);
-        contentPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
-        
-        JLabel placeholderLabel = new JLabel("Refunds functionality coming soon...", SwingConstants.CENTER);
-        placeholderLabel.setFont(new Font("Arial", Font.PLAIN, 16));
-        placeholderLabel.setForeground(TEXT_COLOR);
-        
-        contentPanel.add(placeholderLabel, BorderLayout.CENTER);
-        refundsPanel.add(contentPanel, BorderLayout.CENTER);
-        
-        return refundsPanel;
+        try {
+            return new RefundsPage(); // This is your full RefundsPage class!
+        } catch (Exception e) {
+            e.printStackTrace();
+            JPanel errorPanel = new JPanel();
+            errorPanel.add(new JLabel("Failed to load Refunds Page: " + e.getMessage()));
+            return errorPanel;
+        }
     }
+
 
 
     // Class to handle window dragging
