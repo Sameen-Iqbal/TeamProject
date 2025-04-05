@@ -1,492 +1,217 @@
 package UI;
 
+import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableRowSorter;
+
 import db.dbConnection;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
-import org.jfree.chart.plot.PlotOrientation;
 import org.jfree.data.category.DefaultCategoryDataset;
-import org.jfree.data.general.DefaultPieDataset;
-
-import javax.swing.*;
-import javax.swing.border.TitledBorder;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.text.SimpleDateFormat;
-import java.util.*;
-import java.util.List;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 
-/**
- * ReportsPage displays ticket sales data using charts
- */
 public class ReportsPage extends JPanel {
-    private static final Color BACKGROUND_COLOR = new Color(245, 246, 250);
-    private static final Color CARD_COLOR = new Color(255, 255, 255);
-    private static final Color TEXT_COLOR = new Color(50, 50, 50);
-    private static final Color PRIMARY_COLOR = new Color(60, 90, 153);
+    private JTextField searchField;
+    private JTextField fromDateField;
+    private JTextField toDateField;
+    private JComboBox<String> reportTypeCombo;
+    private JButton searchButton;
+    private JButton exportButton;
 
-    private JPanel chartsPanel;
-    private JComboBox<String> reportTypeComboBox;
-    private JPanel controlPanel;
-    private JComboBox<String> dateRangeComboBox;
-    private JPanel datePickerPanel;
-    private JTextField startDateField;
-    private JTextField endDateField;
+    private TableRowSorter<DefaultTableModel> sorter;
+    private JTable table;
+    private DefaultTableModel tableModel;
 
     public ReportsPage() {
         setLayout(new BorderLayout());
-        setBackground(BACKGROUND_COLOR);
-        
-        createControlPanel();
-        add(controlPanel, BorderLayout.NORTH);
-        
-        chartsPanel = new JPanel(new GridLayout(1, 2, 10, 10));
-        chartsPanel.setBackground(BACKGROUND_COLOR);
-        chartsPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        add(chartsPanel, BorderLayout.CENTER);
-        
-        // Initial display
-        updateCharts("Ticket Sales by Show");
-    }
-    
-    private void createControlPanel() {
-        controlPanel = new JPanel(new BorderLayout());
-        controlPanel.setBackground(CARD_COLOR);
-        controlPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        
-        JPanel selectionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        selectionPanel.setBackground(CARD_COLOR);
-        
-        JLabel reportTypeLabel = new JLabel("Report Type:");
-        reportTypeLabel.setFont(new Font("Arial", Font.BOLD, 14));
-        selectionPanel.add(reportTypeLabel);
-        
-        String[] reportTypes = {
-            "Ticket Sales by Show", 
-            "Ticket Sales by Date", 
-            "Revenue by Show",
-            "Hall Occupancy"
-        };
-        
-        reportTypeComboBox = new JComboBox<>(reportTypes);
-        reportTypeComboBox.setFont(new Font("Arial", Font.PLAIN, 14));
-        reportTypeComboBox.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                String selectedType = (String) reportTypeComboBox.getSelectedItem();
-                updateDatePickerVisibility(selectedType);
-                updateCharts(selectedType);
-            }
+
+        // === Filter Panel ===
+        JPanel filterPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        filterPanel.setBorder(BorderFactory.createTitledBorder("Filters"));
+
+        fromDateField = new JTextField(10);
+        toDateField = new JTextField(10);
+        reportTypeCombo = new JComboBox<>(new String[] {
+                "All", "Matinee", "Friday Night", "Rehearsal", "Weekend Special"
         });
-        selectionPanel.add(reportTypeComboBox);
-        
-        // Date range selector
-        JLabel dateRangeLabel = new JLabel("    Date Range:");
-        dateRangeLabel.setFont(new Font("Arial", Font.BOLD, 14));
-        selectionPanel.add(dateRangeLabel);
-        
-        String[] dateRanges = {
-            "Last 7 Days", 
-            "Last 30 Days", 
-            "Last 90 Days",
-            "Custom Range"
+
+        fromDateField.setToolTipText("dd/mm/yyyy");
+        toDateField.setToolTipText("dd/mm/yyyy");
+
+        filterPanel.add(new JLabel("From Date:"));
+        filterPanel.add(fromDateField);
+        filterPanel.add(new JLabel("To Date:"));
+        filterPanel.add(toDateField);
+        filterPanel.add(new JLabel("Report Type:"));
+        filterPanel.add(reportTypeCombo);
+
+        add(filterPanel, BorderLayout.NORTH);
+
+        // === Search Panel ===
+        JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        searchPanel.setBorder(BorderFactory.createTitledBorder("Search"));
+
+        searchField = new JTextField(20);
+        searchButton = new JButton("Search");
+        exportButton = new JButton("Export as CSV");
+
+        searchPanel.add(new JLabel("Search:"));
+        searchPanel.add(searchField);
+        searchPanel.add(searchButton);
+        searchPanel.add(exportButton);
+
+        add(searchPanel, BorderLayout.BEFORE_FIRST_LINE);
+
+        // === Table Setup ===
+        String[] columns = {
+                "Report_ID", "Report_Date", "Report_Type", "Show_ID",
+                "Total_Tickets_Sold", "Total_Revenue", "Seats_Available",
+                "Wheelchair_Seats_Sold", "Restricted_View_Seats_Sold",
+                "Personnel", "Total_Discounts_Applied", "Total_Discounted_Amount",
+                "Total_Group_Tickets_Sold", "Total_Group_Revenue",
+                "Total_Friends_Tickets_Sold", "Total_Friends_Revenue"
         };
-        
-        dateRangeComboBox = new JComboBox<>(dateRanges);
-        dateRangeComboBox.setFont(new Font("Arial", Font.PLAIN, 14));
-        dateRangeComboBox.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                String selectedRange = (String) dateRangeComboBox.getSelectedItem();
-                if ("Custom Range".equals(selectedRange)) {
-                    datePickerPanel.setVisible(true);
-                } else {
-                    datePickerPanel.setVisible(false);
-                    updateCharts((String) reportTypeComboBox.getSelectedItem());
+
+        tableModel = new DefaultTableModel(columns, 0);
+        table = new JTable(tableModel);
+        JScrollPane scrollPane = new JScrollPane(table);
+        add(scrollPane, BorderLayout.CENTER);
+
+        // === Search Logic with Filters ===
+        sorter = new TableRowSorter<>(tableModel);
+        table.setRowSorter(sorter);
+
+        searchButton.addActionListener(e -> {
+            String searchText = searchField.getText().trim().toLowerCase();
+            String selectedType = reportTypeCombo.getSelectedItem().toString();
+            String from = fromDateField.getText().trim();
+            String to = toDateField.getText().trim();
+
+            sorter.setRowFilter(new RowFilter<DefaultTableModel, Integer>() {
+                @Override
+                public boolean include(Entry<? extends DefaultTableModel, ? extends Integer> entry) {
+                    StringBuilder rowText = new StringBuilder();
+                    for (int i = 0; i < entry.getValueCount(); i++) {
+                        rowText.append(String.valueOf(entry.getValue(i)).toLowerCase()).append(" ");
+                    }
+
+                    boolean matchesSearch = searchText.isEmpty() || rowText.toString().contains(searchText);
+                    boolean matchesType = selectedType.equals("All") || entry.getStringValue(2).equalsIgnoreCase(selectedType);
+                    boolean matchesDate = true;
+
+                    try {
+                        DateTimeFormatter userFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+                        DateTimeFormatter tableFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+                        LocalDate fromDate = from.isEmpty() ? null : LocalDate.parse(from, userFormat);
+                        LocalDate toDate = to.isEmpty() ? null : LocalDate.parse(to, userFormat);
+
+                        String tableDateStr = entry.getStringValue(1);
+                        LocalDate tableDate = LocalDate.parse(tableDateStr, tableFormat);
+
+                        if (fromDate != null && tableDate.isBefore(fromDate)) matchesDate = false;
+                        if (toDate != null && tableDate.isAfter(toDate)) matchesDate = false;
+                    } catch (Exception ex) {
+                        matchesDate = false;
+                    }
+
+                    return matchesSearch && matchesType && matchesDate;
+                }
+            });
+        });
+
+        exportButton.addActionListener(e -> exportToCSV());
+
+        loadReportData();
+
+        // === Chart Panel ===
+        add(new ReportsChartPanel(tableModel), BorderLayout.SOUTH);
+    }
+
+    private void exportToCSV() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Save Report As");
+        int userSelection = fileChooser.showSaveDialog(this);
+
+        if (userSelection == JFileChooser.APPROVE_OPTION) {
+            File fileToSave = fileChooser.getSelectedFile();
+            if (!fileToSave.getName().toLowerCase().endsWith(".csv")) {
+                fileToSave = new File(fileToSave.getAbsolutePath() + ".csv");
+            }
+
+            try (FileWriter fw = new FileWriter(fileToSave)) {
+                for (int i = 0; i < tableModel.getColumnCount(); i++) {
+                    fw.write(tableModel.getColumnName(i));
+                    if (i != tableModel.getColumnCount() - 1) fw.write(",");
+                }
+                fw.write("\n");
+
+                for (int row = 0; row < tableModel.getRowCount(); row++) {
+                    for (int col = 0; col < tableModel.getColumnCount(); col++) {
+                        fw.write(String.valueOf(tableModel.getValueAt(row, col)));
+                        if (col != tableModel.getColumnCount() - 1) fw.write(",");
+                    }
+                    fw.write("\n");
+                }
+
+                JOptionPane.showMessageDialog(this, "Exported successfully to:\n" + fileToSave.getAbsolutePath());
+            } catch (IOException ex) {
+                ex.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Failed to export: " + ex.getMessage());
+            }
+        }
+    }
+
+    private void loadReportData() {
+        ResultSet rs = dbConnection.getAllBoxOfficeReports();
+
+        try {
+            if (rs != null) {
+                while (rs.next()) {
+                    Object[] row = {
+                            rs.getInt("Report_ID"),
+                            rs.getDate("Report_Date"),
+                            rs.getString("Report_Type"),
+                            rs.getInt("Show_ID"),
+                            rs.getInt("Total_Tickets_Sold"),
+                            rs.getDouble("Total_Revenue"),
+                            rs.getInt("Seats_Available"),
+                            rs.getInt("Wheelchair_Seats_Sold"),
+                            rs.getInt("Restricted_View_Seats_Sold"),
+                            rs.getString("Personnel"),
+                            rs.getInt("Total_Discounts_Applied"),
+                            rs.getDouble("Total_Discounted_Amount"),
+                            rs.getInt("Total_Group_Tickets_Sold"),
+                            rs.getDouble("Total_Group_Revenue"),
+                            rs.getInt("Total_Friends_Tickets_Sold"),
+                            rs.getDouble("Total_Friends_Revenue")
+                    };
+                    tableModel.addRow(row);
                 }
             }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Failed to load reports: " + e.getMessage());
+        }
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> {
+            JFrame frame = new JFrame("Box Office Reports");
+            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            frame.setSize(1200, 800);
+            frame.add(new ReportsPage());
+            frame.setLocationRelativeTo(null);
+            frame.setVisible(true);
         });
-        selectionPanel.add(dateRangeComboBox);
-        
-        // Date picker for custom range
-        datePickerPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        datePickerPanel.setBackground(CARD_COLOR);
-        
-        JLabel startDateLabel = new JLabel("Start Date (YYYY-MM-DD):");
-        startDateLabel.setFont(new Font("Arial", Font.PLAIN, 14));
-        datePickerPanel.add(startDateLabel);
-        
-        startDateField = new JTextField(10);
-        startDateField.setFont(new Font("Arial", Font.PLAIN, 14));
-        datePickerPanel.add(startDateField);
-        
-        JLabel endDateLabel = new JLabel("End Date (YYYY-MM-DD):");
-        endDateLabel.setFont(new Font("Arial", Font.PLAIN, 14));
-        datePickerPanel.add(endDateLabel);
-        
-        endDateField = new JTextField(10);
-        endDateField.setFont(new Font("Arial", Font.PLAIN, 14));
-        datePickerPanel.add(endDateField);
-        
-        JButton applyButton = new JButton("Apply");
-        applyButton.setFont(new Font("Arial", Font.BOLD, 14));
-        applyButton.setBackground(PRIMARY_COLOR);
-        applyButton.setForeground(Color.WHITE);
-        applyButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                updateCharts((String) reportTypeComboBox.getSelectedItem());
-            }
-        });
-        datePickerPanel.add(applyButton);
-        
-        datePickerPanel.setVisible(false);
-        
-        selectionPanel.add(datePickerPanel);
-        controlPanel.add(selectionPanel, BorderLayout.CENTER);
-        
-        // Set default values
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
-        Calendar cal = Calendar.getInstance();
-        endDateField.setText(sdf.format(cal.getTime()));
-        cal.add(Calendar.DAY_OF_MONTH, -30);
-        startDateField.setText(sdf.format(cal.getTime()));
-    }
-    
-    private void updateDatePickerVisibility(String reportType) {
-        boolean showDateSelector = reportType.equals("Ticket Sales by Date");
-        dateRangeComboBox.setVisible(showDateSelector);
-        if (!showDateSelector) {
-            datePickerPanel.setVisible(false);
-        } else if ("Custom Range".equals(dateRangeComboBox.getSelectedItem())) {
-            datePickerPanel.setVisible(true);
-        }
-    }
-    
-    private void updateCharts(String reportType) {
-        chartsPanel.removeAll();
-        
-        switch (reportType) {
-            case "Ticket Sales by Show":
-                displayTicketSalesByShow();
-                break;
-            case "Ticket Sales by Date":
-                displayTicketSalesByDate();
-                break;
-            case "Revenue by Show":
-                displayRevenueByShow();
-                break;
-            case "Hall Occupancy":
-                displayHallOccupancy();
-                break;
-        }
-        
-        chartsPanel.revalidate();
-        chartsPanel.repaint();
-    }
-    
-    private void displayTicketSalesByShow() {
-        Map<String, Integer> data = dbConnection.getTicketSalesByShow();
-        
-        // Create pie chart
-        DefaultPieDataset pieDataset = new DefaultPieDataset();
-        for (Map.Entry<String, Integer> entry : data.entrySet()) {
-            pieDataset.setValue(entry.getKey(), entry.getValue());
-        }
-        
-        JFreeChart pieChart = ChartFactory.createPieChart(
-            "Ticket Sales Distribution by Show",
-            pieDataset,
-            true,  // legend
-            true,  // tooltips
-            false  // urls
-        );
-        
-        ChartPanel pieChartPanel = new ChartPanel(pieChart);
-        pieChartPanel.setPreferredSize(new Dimension(400, 300));
-        pieChartPanel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createEmptyBorder(15, 15, 15, 15),
-            BorderFactory.createLineBorder(Color.LIGHT_GRAY)
-        ));
-        pieChartPanel.setBackground(CARD_COLOR);
-        
-        // Create bar chart
-        DefaultCategoryDataset barDataset = new DefaultCategoryDataset();
-        for (Map.Entry<String, Integer> entry : data.entrySet()) {
-            barDataset.addValue(entry.getValue(), "Tickets Sold", entry.getKey());
-        }
-        
-        JFreeChart barChart = ChartFactory.createBarChart(
-            "Number of Tickets Sold by Show",
-            "Show",
-            "Tickets Sold",
-            barDataset,
-            PlotOrientation.VERTICAL,
-            true,  // legend
-            true,  // tooltips
-            false  // urls
-        );
-        
-        ChartPanel barChartPanel = new ChartPanel(barChart);
-        barChartPanel.setPreferredSize(new Dimension(400, 300));
-        barChartPanel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createEmptyBorder(15, 15, 15, 15),
-            BorderFactory.createLineBorder(Color.LIGHT_GRAY)
-        ));
-        barChartPanel.setBackground(CARD_COLOR);
-        
-        chartsPanel.add(pieChartPanel);
-        chartsPanel.add(barChartPanel);
-        
-        // If no data, display a message
-        if (data.isEmpty()) {
-            displayNoDataMessage();
-        }
-    }
-    
-    private void displayTicketSalesByDate() {
-        String startDate, endDate;
-        String selectedRange = (String) dateRangeComboBox.getSelectedItem();
-        
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
-        Calendar cal = Calendar.getInstance();
-        endDate = sdf.format(cal.getTime());
-        
-        switch (selectedRange) {
-            case "Last 7 Days":
-                cal.add(Calendar.DAY_OF_MONTH, -7);
-                startDate = sdf.format(cal.getTime());
-                break;
-            case "Last 30 Days":
-                cal.add(Calendar.DAY_OF_MONTH, -30);
-                startDate = sdf.format(cal.getTime());
-                break;
-            case "Last 90 Days":
-                cal.add(Calendar.DAY_OF_MONTH, -90);
-                startDate = sdf.format(cal.getTime());
-                break;
-            case "Custom Range":
-                startDate = startDateField.getText();
-                endDate = endDateField.getText();
-                break;
-            default:
-                cal.add(Calendar.DAY_OF_MONTH, -30);
-                startDate = sdf.format(cal.getTime());
-        }
-        
-        Map<String, Integer> data = dbConnection.getTicketSalesByDateRange(startDate, endDate);
-        
-        // Create line chart
-        DefaultCategoryDataset lineDataset = new DefaultCategoryDataset();
-        for (Map.Entry<String, Integer> entry : data.entrySet()) {
-            lineDataset.addValue(entry.getValue(), "Tickets Sold", entry.getKey());
-        }
-        
-        JFreeChart lineChart = ChartFactory.createLineChart(
-            "Ticket Sales Trend (" + startDate + " to " + endDate + ")",
-            "Date",
-            "Tickets Sold",
-            lineDataset,
-            PlotOrientation.VERTICAL,
-            true,  // legend
-            true,  // tooltips
-            false  // urls
-        );
-        
-        ChartPanel lineChartPanel = new ChartPanel(lineChart);
-        lineChartPanel.setPreferredSize(new Dimension(400, 300));
-        lineChartPanel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createEmptyBorder(15, 15, 15, 15),
-            BorderFactory.createLineBorder(Color.LIGHT_GRAY)
-        ));
-        lineChartPanel.setBackground(CARD_COLOR);
-        
-        // Create bar chart for the same data
-        DefaultCategoryDataset barDataset = new DefaultCategoryDataset();
-        for (Map.Entry<String, Integer> entry : data.entrySet()) {
-            barDataset.addValue(entry.getValue(), "Tickets Sold", entry.getKey());
-        }
-        
-        JFreeChart barChart = ChartFactory.createBarChart(
-            "Daily Ticket Sales (" + startDate + " to " + endDate + ")",
-            "Date",
-            "Tickets Sold",
-            barDataset,
-            PlotOrientation.VERTICAL,
-            true,  // legend
-            true,  // tooltips
-            false  // urls
-        );
-        
-        ChartPanel barChartPanel = new ChartPanel(barChart);
-        barChartPanel.setPreferredSize(new Dimension(400, 300));
-        barChartPanel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createEmptyBorder(15, 15, 15, 15),
-            BorderFactory.createLineBorder(Color.LIGHT_GRAY)
-        ));
-        barChartPanel.setBackground(CARD_COLOR);
-        
-        chartsPanel.add(lineChartPanel);
-        chartsPanel.add(barChartPanel);
-        
-        // If no data, display a message
-        if (data.isEmpty()) {
-            displayNoDataMessage();
-        }
-    }
-    
-    private void displayRevenueByShow() {
-        Map<String, Double> data = dbConnection.getRevenueByShow();
-        
-        // Create pie chart
-        DefaultPieDataset pieDataset = new DefaultPieDataset();
-        for (Map.Entry<String, Double> entry : data.entrySet()) {
-            pieDataset.setValue(entry.getKey(), entry.getValue());
-        }
-        
-        JFreeChart pieChart = ChartFactory.createPieChart(
-            "Revenue Distribution by Show",
-            pieDataset,
-            true,  // legend
-            true,  // tooltips
-            false  // urls
-        );
-        
-        ChartPanel pieChartPanel = new ChartPanel(pieChart);
-        pieChartPanel.setPreferredSize(new Dimension(400, 300));
-        pieChartPanel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createEmptyBorder(15, 15, 15, 15),
-            BorderFactory.createLineBorder(Color.LIGHT_GRAY)
-        ));
-        pieChartPanel.setBackground(CARD_COLOR);
-        
-        // Create bar chart
-        DefaultCategoryDataset barDataset = new DefaultCategoryDataset();
-        for (Map.Entry<String, Double> entry : data.entrySet()) {
-            barDataset.addValue(entry.getValue(), "Revenue (£)", entry.getKey());
-        }
-        
-        JFreeChart barChart = ChartFactory.createBarChart(
-            "Revenue by Show",
-            "Show",
-            "Revenue (£)",
-            barDataset,
-            PlotOrientation.VERTICAL,
-            true,  // legend
-            true,  // tooltips
-            false  // urls
-        );
-        
-        ChartPanel barChartPanel = new ChartPanel(barChart);
-        barChartPanel.setPreferredSize(new Dimension(400, 300));
-        barChartPanel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createEmptyBorder(15, 15, 15, 15),
-            BorderFactory.createLineBorder(Color.LIGHT_GRAY)
-        ));
-        barChartPanel.setBackground(CARD_COLOR);
-        
-        chartsPanel.add(pieChartPanel);
-        chartsPanel.add(barChartPanel);
-        
-        // If no data, display a message
-        if (data.isEmpty()) {
-            displayNoDataMessage();
-        }
-    }
-    
-    private void displayHallOccupancy() {
-        List<Map<String, Object>> data = dbConnection.getHallOccupancyData();
-        
-        // Create stacked bar chart
-        DefaultCategoryDataset barDataset = new DefaultCategoryDataset();
-        
-        for (Map<String, Object> showData : data) {
-            String show = (String) showData.get("showTitle");
-            int capacity = (int) showData.get("capacity");
-            int occupied = (int) showData.get("occupied");
-            int available = capacity - occupied;
-            
-            barDataset.addValue(occupied, "Occupied", show);
-            barDataset.addValue(available, "Available", show);
-        }
-        
-        JFreeChart barChart = ChartFactory.createStackedBarChart(
-            "Hall Occupancy by Show",
-            "Show",
-            "Number of Seats",
-            barDataset,
-            PlotOrientation.VERTICAL,
-            true,  // legend
-            true,  // tooltips
-            false  // urls
-        );
-        
-        ChartPanel barChartPanel = new ChartPanel(barChart);
-        barChartPanel.setPreferredSize(new Dimension(400, 300));
-        barChartPanel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createEmptyBorder(15, 15, 15, 15),
-            BorderFactory.createLineBorder(Color.LIGHT_GRAY)
-        ));
-        barChartPanel.setBackground(CARD_COLOR);
-        
-        // Create pie chart for overall occupancy
-        DefaultPieDataset pieDataset = new DefaultPieDataset();
-        int totalOccupied = 0;
-        int totalCapacity = 0;
-        
-        for (Map<String, Object> showData : data) {
-            totalCapacity += (int) showData.get("capacity");
-            totalOccupied += (int) showData.get("occupied");
-        }
-        
-        int totalAvailable = totalCapacity - totalOccupied;
-        pieDataset.setValue("Occupied", totalOccupied);
-        pieDataset.setValue("Available", totalAvailable);
-        
-        JFreeChart pieChart = ChartFactory.createPieChart(
-            "Overall Hall Occupancy",
-            pieDataset,
-            true,  // legend
-            true,  // tooltips
-            false  // urls
-        );
-        
-        ChartPanel pieChartPanel = new ChartPanel(pieChart);
-        pieChartPanel.setPreferredSize(new Dimension(400, 300));
-        pieChartPanel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createEmptyBorder(15, 15, 15, 15),
-            BorderFactory.createLineBorder(Color.LIGHT_GRAY)
-        ));
-        pieChartPanel.setBackground(CARD_COLOR);
-        
-        chartsPanel.add(barChartPanel);
-        chartsPanel.add(pieChartPanel);
-        
-        // If no data, display a message
-        if (data.isEmpty()) {
-            displayNoDataMessage();
-        }
-    }
-    
-    private void displayNoDataMessage() {
-        chartsPanel.removeAll();
-        
-        JPanel messagePanel = new JPanel(new BorderLayout());
-        messagePanel.setBackground(CARD_COLOR);
-        messagePanel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createEmptyBorder(15, 15, 15, 15),
-            BorderFactory.createLineBorder(Color.LIGHT_GRAY)
-        ));
-        
-        JLabel messageLabel = new JLabel("No data available for this report type", SwingConstants.CENTER);
-        messageLabel.setFont(new Font("Arial", Font.BOLD, 18));
-        messageLabel.setForeground(TEXT_COLOR);
-        
-        messagePanel.add(messageLabel, BorderLayout.CENTER);
-        chartsPanel.add(messagePanel);
-        
-        chartsPanel.revalidate();
-        chartsPanel.repaint();
     }
 }
