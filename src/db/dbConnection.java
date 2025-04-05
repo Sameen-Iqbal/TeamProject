@@ -866,6 +866,41 @@ public class dbConnection {
         return tickets;
     }
 
+    public static ResultSet getBoxOfficeReports() {
+        String query = "SELECT s.Show_Title, COUNT(t.Ticket_ID) AS Tickets_Sold, " +
+                "SUM(t.Ticket_Price) AS Total_Revenue " +
+                "FROM Shows s " +
+                "LEFT JOIN Ticket t ON s.Show_ID = t.Show_ID " +
+                "WHERE t.IsSold = 1 " +
+                "GROUP BY s.Show_Title " +
+                "ORDER BY Total_Revenue DESC";
+
+        try {
+            Connection con = getConnection();
+            PreparedStatement stmt = con.prepareStatement(query);
+            return stmt.executeQuery();
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    public static ResultSet getAllBoxOfficeReports() {
+        String query = "SELECT * FROM BoxOfficeReport";
+        try {
+            Connection con = getConnection();
+            PreparedStatement stmt = con.prepareStatement(query);
+            return stmt.executeQuery();
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+
+
+
+
     /**
      * Searches for tickets based on various criteria
      * @param showId The ID of the show to search for (null for any show)
